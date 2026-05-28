@@ -17,7 +17,7 @@ from datetime import datetime, timedelta, timezone, date
 from email.header import decode_header
 from email.utils import parsedate_to_datetime
 
-import google.generativeai as genai
+from google import genai
 
 # ── Config ──────────────────────────────────────────────────────────────────
 GMAIL_EMAIL      = os.environ["GMAIL_EMAIL"]
@@ -191,8 +191,7 @@ def classify_emails(emails):
     if not emails:
         return []
 
-    genai.configure(api_key=GEMINI_API_KEY)
-    model = genai.GenerativeModel("gemini-1.5-flash")
+    client = genai.Client(api_key=GEMINI_API_KEY)
 
     lines = [
         f'[{i}]\nFROM: {e["from"]}\nSUBJECT: {e["subject"]}\nPREVIEW: {e["snippet"]}'
@@ -200,7 +199,10 @@ def classify_emails(emails):
     ]
 
     try:
-        resp = model.generate_content(CLASSIFY_PROMPT + "\n\n".join(lines))
+        resp = client.models.generate_content(
+            model="gemini-1.5-flash",
+            contents=CLASSIFY_PROMPT + "\n\n".join(lines),
+        )
         text = resp.text.strip()
 
         if "```" in text:
@@ -251,6 +253,12 @@ def format_telegram_message(e, reason):
 # ── Main ────────────────────────────────────────────────────────────────────
 def main():
     print(f"=== Email Watcher | Checking last {LOOKBACK_MINUTES} min ===")
+
+    # if manually triggered, send test ping so Telegram can be verified
+    is_manual = os.environ.get("GITHUB_EVENT_NAME") == "workflow_dispatch"
+    if is_manual:
+        send_telegram("✅ <b>Email Watcher is working!</b>\n\nTelegram connection confirmed. You'll get pinged here when a real important email arrives.")
+        print("Test ping sent to Telegram")
 
     emails = fetch_recent_emails()
     print(f"Passed pre-filter: {len(emails)} emails")
