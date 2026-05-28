@@ -2,8 +2,8 @@ name: Email Watcher
 
 on:
   schedule:
-    # every 30 minutes
-    - cron: "*/30 * * * *"
+    # 7:00 AM Nepal time = 01:15 UTC
+    - cron: "15 1 * * *"
   workflow_dispatch: # manual trigger for testing
 
 jobs:

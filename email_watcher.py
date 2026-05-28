@@ -26,8 +26,8 @@ GEMINI_API_KEY   = os.environ["GEMINI_API_KEY"]
 TELEGRAM_TOKEN   = os.environ["TELEGRAM_BOT_TOKEN"]
 TELEGRAM_CHAT_ID = os.environ["TELEGRAM_CHAT_ID"]
 
-# check emails from last N minutes (28 = slight buffer under 30-min cron)
-LOOKBACK_MINUTES = 28
+# check last 24 hours
+LOOKBACK_MINUTES = 24 * 60
 
 # ── Decode email headers ────────────────────────────────────────────────────
 def decode_str(s):
@@ -235,19 +235,32 @@ def send_telegram(text):
         print(f"Telegram error: {resp.text}", file=sys.stderr)
 
 
-def format_telegram_message(e, reason):
-    sender  = e["from"][:80]
-    subject = e["subject"][:120]
-    preview = e["snippet"][:300]
+def format_batch_telegram_message(alerted_emails):
+    today = datetime.now().strftime("%B %d, %Y")
+    lines = [f"📬 <b>Morning Email Report — {today}</b>\n"]
+    lines.append(f"{len(alerted_emails)} important email(s) need your attention:\n")
 
-    return (
-        f"📬 <b>Important Email</b>\n\n"
-        f"<b>From:</b> {sender}\n"
-        f"<b>Subject:</b> {subject}\n\n"
-        f"<i>{preview}</i>\n\n"
-        f"🤖 <i>AI: {reason}</i>\n\n"
-        f'<a href="https://mail.google.com">Open Gmail →</a>'
-    )
+    for i, (em, reason) in enumerate(alerted_emails, 1):
+        sender  = em["from"][:70]
+        subject = em["subject"][:100]
+        preview = em["snippet"][:200]
+        lines.append(
+            f"──────────────\n"
+            f"<b>{i}. {subject}</b>\n"
+            f"From: {sender}\n"
+            f"<i>{preview}</i>\n"
+            f"🤖 {reason}"
+        )
+
+    lines.append(f'\n──────────────\n<a href="https://mail.google.com">Open Gmail →</a>')
+
+    full = "\n\n".join(lines)
+
+    # Telegram limit: 4096 chars — trim preview if needed
+    if len(full) > 4000:
+        full = full[:3990] + "\n...(truncated)"
+
+    return full
 
 
 # ── Main ────────────────────────────────────────────────────────────────────
@@ -270,21 +283,26 @@ def main():
     results = classify_emails(emails)
     idx_map = {r["index"]: r for r in results}
 
-    alerted = 0
+    alerted_emails = []
     for i, em in enumerate(emails):
         result = idx_map.get(i, {})
         should_alert = result.get("alert", True)  # default True = never miss
         reason = result.get("reason", "")
 
         if should_alert:
-            msg = format_telegram_message(em, reason)
-            send_telegram(msg)
-            print(f"ALERTED: {em['subject'][:60]}")
-            alerted += 1
+            alerted_emails.append((em, reason))
+            print(f"ALERT: {em['subject'][:60]}")
         else:
-            print(f"SKIP: {em['subject'][:60]}")
+            print(f"SKIP:  {em['subject'][:60]}")
 
-    print(f"Done: {alerted} alerts sent out of {len(emails)} emails checked")
+    if alerted_emails:
+        msg = format_batch_telegram_message(alerted_emails)
+        send_telegram(msg)
+        print(f"Sent 1 Telegram message with {len(alerted_emails)} email(s)")
+    else:
+        print("No important emails today — Telegram silent")
+
+    print(f"Done: {len(alerted_emails)} important out of {len(emails)} checked")
 
 
 if __name__ == "__main__":
