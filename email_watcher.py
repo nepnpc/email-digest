@@ -200,7 +200,7 @@ def classify_emails(emails):
 
     try:
         resp = client.models.generate_content(
-            model="gemini-1.5-flash",
+            model="gemini-2.0-flash",
             contents=CLASSIFY_PROMPT + "\n\n".join(lines),
         )
         text = resp.text.strip()
