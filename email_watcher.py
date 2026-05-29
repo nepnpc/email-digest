@@ -235,15 +235,19 @@ def send_telegram(text):
         print(f"Telegram error: {resp.text}", file=sys.stderr)
 
 
+def esc(text):
+    return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
 def format_batch_telegram_message(alerted_emails):
     today = datetime.now().strftime("%B %d, %Y")
     lines = [f"📬 <b>Morning Email Report — {today}</b>\n"]
     lines.append(f"{len(alerted_emails)} important email(s) need your attention:\n")
 
     for i, (em, reason) in enumerate(alerted_emails, 1):
-        sender  = em["from"][:70]
-        subject = em["subject"][:100]
-        preview = em["snippet"][:200]
+        sender  = esc(em["from"][:70])
+        subject = esc(em["subject"][:100])
+        preview = esc(em["snippet"][:200])
         lines.append(
             f"──────────────\n"
             f"<b>{i}. {subject}</b>\n"
